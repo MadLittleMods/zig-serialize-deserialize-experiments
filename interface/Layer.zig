@@ -18,11 +18,6 @@ deinitFn: *const fn (
     ptr: *anyopaque,
     allocator: std.mem.Allocator,
 ) void,
-forwardFn: *const fn (
-    ptr: *anyopaque,
-    inputs: []const f64,
-    allocator: std.mem.Allocator,
-) anyerror![]f64,
 
 /// A generic constructor that any sub-classes can use to create a `Layer`.
 //
@@ -63,19 +58,6 @@ pub fn init(
             const self: T = @ptrCast(@alignCast(pointer));
             ptr_info.Pointer.child.deinit(self, allocator);
         }
-        pub fn forward(
-            pointer: *anyopaque,
-            inputs: []const f64,
-            allocator: std.mem.Allocator,
-        ) anyerror![]f64 {
-            const self: T = @ptrCast(@alignCast(pointer));
-            // We could alternatively use `@call(.always_inline,
-            // ptr_info.Pointer.child.forward, .{ self, inputs, allocator });` for
-            // any of these functions calls. It would be best to test if this has a
-            // performance impact before making our code more complex though. Using
-            // this also has the benefit of cleaning up the call-stack.
-            return ptr_info.Pointer.child.forward(self, inputs, allocator);
-        }
     };
 
     return .{
@@ -83,7 +65,6 @@ pub fn init(
         .serializeFn = gen.serialize,
         .deserializeFn = gen.deserialize,
         .deinitFn = gen.deinit,
-        .forwardFn = gen.forward,
     };
 }
 
@@ -100,13 +81,4 @@ pub fn deserialize(self: @This(), json: std.json.Value, allocator: std.mem.Alloc
 /// Used to clean-up any allocated resources used in the layer.
 pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
     return self.deinitFn(self.ptr, allocator);
-}
-
-/// Run the given `inputs` through a layer of the neural network and return the outputs.
-pub fn forward(
-    self: @This(),
-    inputs: []const f64,
-    allocator: std.mem.Allocator,
-) ![]f64 {
-    return self.forwardFn(self.ptr, inputs, allocator);
 }

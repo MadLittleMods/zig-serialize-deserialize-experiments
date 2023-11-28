@@ -34,7 +34,9 @@ pub fn init(
 ) !Self {
     // Initialize the weights
     const weights: []f64 = try allocator.alloc(f64, num_input_nodes * num_output_nodes);
+    @memset(weights, 0);
     const biases: []f64 = try allocator.alloc(f64, num_output_nodes);
+    @memset(biases, 0);
 
     // Create the cost gradients and initialize the values to 0
     const cost_gradient_weights: []f64 = try allocator.alloc(f64, num_input_nodes * num_output_nodes);
@@ -65,49 +67,8 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     self.* = undefined;
 }
 
-/// Run the given `inputs` through the layer and return the outputs. To get the
-/// `outputs`, each of the `inputs` are multiplied by the weight of their connection to
-/// this layer and then the bias is added to the result.
-///
-/// y = x * w + b
-///
-/// - y is the output (also known as the weighted input or "z")
-/// - x is the input
-/// - w is the weight
-/// - b is the bias
-pub fn forward(
-    self: *@This(),
-    inputs: []const f64,
-    allocator: std.mem.Allocator,
-) ![]f64 {
-    if (inputs.len != self.parameters.num_input_nodes) {
-        log.err("DenseLayer.forward() was called with {d} inputs but we expect " ++
-            "it to match the same num_input_nodes={d}", .{
-            inputs.len,
-            self.parameters.num_input_nodes,
-        });
-
-        return error.ExpectedInputLengthMismatch;
-    }
-    // Store the inputs so we can use them during the backward pass.
-    self.inputs = inputs;
-
-    // Calculate the weighted input sums for each node in this layer: w * x + b
-    var outputs = try allocator.alloc(f64, self.parameters.num_output_nodes);
-    for (0..self.parameters.num_output_nodes) |node_index| {
-        // Calculate the weighted input for this node
-        var weighted_input_sum: f64 = self.parameters.biases[node_index];
-        for (0..self.parameters.num_input_nodes) |node_in_index| {
-            weighted_input_sum += inputs[node_in_index] * self.getWeight(
-                node_index,
-                node_in_index,
-            );
-        }
-        outputs[node_index] = weighted_input_sum;
-    }
-
-    return outputs;
-}
+// XXX: Forward method
+// XXX: Backward method
 
 /// Helper to create a generic `Layer` that we can use in a `NeuralNetwork`
 pub fn layer(self: *@This()) Layer {
