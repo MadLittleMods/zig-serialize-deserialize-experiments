@@ -11,14 +11,12 @@ pub fn init(
     num_layers: usize,
     allocator: std.mem.Allocator,
 ) !Self {
-    const layers = allocator.alloc(Layer, num_layers);
+    const layers = try allocator.alloc(Layer, num_layers);
     for (layers, 0..) |*layer, layer_index| {
-        const dense_layer = try DenseLayer.init(
+        var dense_layer = try DenseLayer.init(
+            layer_index,
+            layer_index + 1,
             allocator,
-            .{
-                .input_size = layer_index,
-                .output_size = layer_index + 1,
-            },
         );
 
         layer.* = dense_layer.layer();
@@ -29,7 +27,7 @@ pub fn init(
     };
 }
 
-pub fn serialize(self: *Self, allocator: std.mem.Allocator) ![]const u8 {
+pub fn serialize(self: *const Self, allocator: std.mem.Allocator) ![]const u8 {
     _ = allocator;
     _ = self;
     // TODO
