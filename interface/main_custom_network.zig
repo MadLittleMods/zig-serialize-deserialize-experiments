@@ -36,25 +36,30 @@ pub fn main() !void {
     // Create the neural network
     var custom_neural_network = try NeuralNetwork.initFromLayers(
         &layers,
+        // .{
+        //     .layer_lookup_map = {
+        //         "DropoutLayer": CustomDropoutLayer
+        //     },
+        // },
     );
     defer custom_neural_network.deinit(allocator);
 
-    // // Serialize the neural network
-    // const serialized_custom_neural_network = try custom_neural_network.serialize(allocator);
-    // defer allocator.free(serialized_custom_neural_network);
-    // std.log.debug("serialized_custom_neural_network: {s}", .{serialized_custom_neural_network});
+    // Serialize the neural network
+    const serialized_custom_neural_network = try custom_neural_network.serialize(allocator);
+    defer allocator.free(serialized_custom_neural_network);
+    std.log.debug("serialized_custom_neural_network: {s}", .{serialized_custom_neural_network});
 
-    // // Deserialize the neural network
-    // var deserialized_custom_neural_network = try allocator.create(NeuralNetwork);
-    // defer allocator.destroy(deserialized_custom_neural_network);
-    // const parsed_custom_nn = try std.json.parseFromSlice(
-    //     std.json.Value,
-    //     allocator,
-    //     serialized_custom_neural_network,
-    //     .{},
-    // );
-    // defer parsed_custom_nn.deinit();
-    // try deserialized_custom_neural_network.deserialize(parsed_custom_nn.value, allocator);
-    // defer deserialized_custom_neural_network.deinit(allocator);
-    // std.log.debug("deserialized_custom_neural_network: {any}", .{deserialized_custom_neural_network});
+    // Deserialize the neural network
+    var deserialized_custom_neural_network = try allocator.create(NeuralNetwork);
+    defer allocator.destroy(deserialized_custom_neural_network);
+    const parsed_custom_nn = try std.json.parseFromSlice(
+        std.json.Value,
+        allocator,
+        serialized_custom_neural_network,
+        .{},
+    );
+    defer parsed_custom_nn.deinit();
+    try deserialized_custom_neural_network.deserialize(parsed_custom_nn.value, allocator);
+    defer deserialized_custom_neural_network.deinit(allocator);
+    std.log.debug("deserialized_custom_neural_network: {any}", .{deserialized_custom_neural_network});
 }
