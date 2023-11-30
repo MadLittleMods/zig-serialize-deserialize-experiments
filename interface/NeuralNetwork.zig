@@ -103,9 +103,9 @@ pub fn jsonStringify(self: *@This(), jws: anytype) !void {
 }
 
 // @typeInfo(DefaultLayers).Union.tag_type
-pub const DefaultLayers = union(enum) {
-    dense_layer: DenseLayer,
-    activation_layer: ActivationLayer,
+const possible_layer_types = [_]type{
+    DenseLayer,
+    ActivationLayer,
 };
 
 fn deserialize(serialized_neural_network: SerializedNeuralNetwork, allocator: std.mem.Allocator) !@This() {
@@ -114,32 +114,39 @@ fn deserialize(serialized_neural_network: SerializedNeuralNetwork, allocator: st
         serialized_neural_network.layers.len,
     );
 
-    for (serialized_neural_network.layers, layers) |serialized_layer, layer| {
-        const serialized_type = serialized_layer.get("serialized_type") orelse std.json.Value{ .null = void{} };
+    for (serialized_neural_network.layers, layers) |serialized_layer, *layer| {
+        const serialized_type_name = serialized_layer.get("serialized_type_name") orelse std.json.Value{ .null = void{} };
 
-        switch (serialized_type) {
-            .string => |serialized_type_string| {
-                const OptionalParsedType = std.meta.stringToEnum(
-                    @typeInfo(DefaultLayers).Union.tag_type orelse @panic("Expected DefaultLayers to be a tagged union"),
-                    serialized_type_string,
-                );
-                if (OptionalParsedType) |ParsedType| {
-                    var instance = try allocator.create(ParsedType);
-                    try instance.deserialize(serialized_layer, allocator);
+        switch (serialized_type_name) {
+            .string => |serialized_type_name_string| {
+                inline for (possible_layer_types) |LayerType| {
+                    if (std.mem.eql(u8, serialized_type_name_string, @typeName(LayerType))) {
+                        if (serialized_layer.get("parameters")) |parameters_json_value| {
+                            var parsed_specific_layer_instance = try std.json.parseFromValue(
+                                LayerType,
+                                allocator,
+                                parameters_json_value,
+                                .{},
+                            );
 
-                    layer.* = instance.layer();
-                } else {
-                    std.log.warn("Unknown layer type: {s}", .{
-                        serialized_type_string,
-                    });
+                            layer.* = parsed_specific_layer_instance.value.layer();
+                        }
+                    } else {
+                        std.log.err("Unknown serialized_type_name {s}", .{
+                            serialized_type_name_string,
+                        });
+                        //return error.UnknownSerializedTypeName;
+                        return std.json.ParseFromValueError.UnknownField;
+                    }
                 }
             },
             else => {
-                std.log.err("Expected string for layer.serialized_type but saw {s}: {s}", .{
-                    @tagName(serialized_type),
-                    serialized_type,
+                std.log.err("Expected string for layer.serialized_type_name but saw {s}: {any}", .{
+                    @tagName(serialized_type_name),
+                    serialized_type_name,
                 });
-                @panic("Expected string for Layer serialized_type");
+                //return error.InvalidSerializedNeuralNetworkLayer;
+                return std.json.ParseFromValueError.UnknownField;
             },
         }
     }

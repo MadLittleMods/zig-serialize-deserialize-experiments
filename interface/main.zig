@@ -18,7 +18,11 @@ pub fn main() !void {
     defer neural_network.deinit(allocator);
 
     // Serialize the neural network
-    const serialized_neural_network = try std.json.stringifyAlloc(allocator, neural_network, .{});
+    const serialized_neural_network = try std.json.stringifyAlloc(
+        allocator,
+        neural_network,
+        .{},
+    );
     defer allocator.free(serialized_neural_network);
     std.log.debug("serialized_neural_network: {s}", .{serialized_neural_network});
 

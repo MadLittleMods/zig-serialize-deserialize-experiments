@@ -76,7 +76,7 @@ pub fn layer(self: *@This()) Layer {
 
 pub fn jsonStringify(self: *@This(), jws: anytype) !void {
     try jws.write(.{
-        .serialized_type = "DenseLayer",
+        .serialized_type_name = @typeName(Self),
         .parameters = self.parameters,
     });
 }
