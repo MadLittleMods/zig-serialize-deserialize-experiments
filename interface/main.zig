@@ -18,21 +18,19 @@ pub fn main() !void {
     defer neural_network.deinit(allocator);
 
     // Serialize the neural network
-    const serialized_neural_network = try neural_network.serialize(allocator);
+    const serialized_neural_network = try std.json.stringifyAlloc(allocator, neural_network, .{});
     defer allocator.free(serialized_neural_network);
     std.log.debug("serialized_neural_network: {s}", .{serialized_neural_network});
 
     // Deserialize the neural network
-    var deserialized_neural_network = try allocator.create(NeuralNetwork);
-    defer allocator.destroy(deserialized_neural_network);
     const parsed_nn = try std.json.parseFromSlice(
-        std.json.Value,
+        NeuralNetwork,
         allocator,
         serialized_neural_network,
         .{},
     );
     defer parsed_nn.deinit();
-    try deserialized_neural_network.deserialize(parsed_nn.value, allocator);
+    var deserialized_neural_network = parsed_nn.value;
     defer deserialized_neural_network.deinit(allocator);
     std.log.debug("deserialized_neural_network: {any}", .{deserialized_neural_network});
 }

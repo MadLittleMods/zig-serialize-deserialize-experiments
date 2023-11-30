@@ -17,7 +17,6 @@ pub const ActivationFunction = enum {
 const Self = @This();
 
 pub const Parameters = struct {
-    serialized_name: []const u8 = "ActivationLayer",
     activation_function: ActivationFunction,
 };
 
@@ -50,32 +49,44 @@ pub fn layer(self: *@This()) Layer {
     return Layer.init(self);
 }
 
-pub fn serialize(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
-    const json_text = try std.json.stringifyAlloc(
-        allocator,
-        self.parameters,
-        .{
-            .whitespace = .indent_2,
-        },
-    );
-    return json_text;
+pub fn jsonStringify(self: *@This(), jws: anytype) !void {
+    try jws.write(.{
+        .serialized_type = "ActivationLayer",
+        .parameters = self.parameters,
+    });
 }
 
-/// Turn some serialized parameters back into a `ActivationLayer`.
-pub fn deserialize(self: *@This(), json: std.json.Value, allocator: std.mem.Allocator) !void {
-    const parsed_parameters = try std.json.parseFromValue(
-        Parameters,
-        allocator,
-        json,
-        .{},
-    );
-    defer parsed_parameters.deinit();
-    const parameters = parsed_parameters.value;
-
+fn deserializeFromParameters(parameters: Parameters, allocator: std.mem.Allocator) !@This() {
     const activation_layer = try init(
         parameters.activation_function,
         allocator,
     );
 
-    self.* = activation_layer;
+    return activation_layer;
+}
+
+pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+    const parsed_parameters = try std.json.parseFromTokenSource(
+        Parameters,
+        allocator,
+        source,
+        options,
+    );
+    defer parsed_parameters.deinit();
+    const parameters = parsed_parameters.value;
+
+    return try deserializeFromParameters(parameters, allocator);
+}
+
+pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
+    const parsed_parameters = try std.json.parseFromValue(
+        Parameters,
+        allocator,
+        source,
+        options,
+    );
+    defer parsed_parameters.deinit();
+    const parameters = parsed_parameters.value;
+
+    return try deserializeFromParameters(parameters, allocator);
 }
