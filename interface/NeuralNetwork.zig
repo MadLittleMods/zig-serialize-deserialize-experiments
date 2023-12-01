@@ -92,7 +92,7 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
 
 pub const SerializedNeuralNetwork = struct {
     timestamp: i64,
-    layers: []std.json.ObjectMap,
+    layers: []std.json.Value,
 };
 
 pub fn jsonStringify(self: @This(), jws: anytype) !void {
@@ -115,35 +115,48 @@ fn deserialize(serialized_neural_network: SerializedNeuralNetwork, allocator: st
     );
 
     for (serialized_neural_network.layers, layers) |serialized_layer, *layer| {
-        const serialized_type_name = serialized_layer.get("serialized_type_name") orelse std.json.Value{ .null = void{} };
+        switch (serialized_layer) {
+            .object => |serialized_layer_object| {
+                const serialized_type_name = serialized_layer_object.get("serialized_type_name") orelse std.json.Value{ .null = void{} };
 
-        switch (serialized_type_name) {
-            .string => |serialized_type_name_string| {
-                inline for (possible_layer_types) |LayerType| {
-                    if (std.mem.eql(u8, serialized_type_name_string, @typeName(LayerType))) {
-                        if (serialized_layer.get("parameters")) |parameters_json_value| {
-                            var parsed_specific_layer_instance = try std.json.parseFromValue(
-                                LayerType,
-                                allocator,
-                                parameters_json_value,
-                                .{},
-                            );
+                switch (serialized_type_name) {
+                    .string => |serialized_type_name_string| {
+                        inline for (possible_layer_types) |LayerType| {
+                            if (std.mem.eql(u8, serialized_type_name_string, @typeName(LayerType))) {
+                                if (serialized_layer_object.get("parameters")) |parameters_json_value| {
+                                    var parsed_specific_layer_instance = try std.json.parseFromValue(
+                                        LayerType,
+                                        allocator,
+                                        parameters_json_value,
+                                        .{},
+                                    );
 
-                            layer.* = parsed_specific_layer_instance.value.layer();
+                                    layer.* = parsed_specific_layer_instance.value.layer();
+                                    break;
+                                }
+                            }
+                        } else {
+                            std.log.err("Unknown serialized_type_name {s}", .{
+                                serialized_type_name_string,
+                            });
+                            //return error.UnknownSerializedTypeName;
+                            return std.json.ParseFromValueError.UnknownField;
                         }
-                    } else {
-                        std.log.err("Unknown serialized_type_name {s}", .{
-                            serialized_type_name_string,
+                    },
+                    else => {
+                        std.log.err("Expected string for layer.serialized_type_name but saw {s}: {any}", .{
+                            @tagName(serialized_type_name),
+                            serialized_type_name,
                         });
-                        //return error.UnknownSerializedTypeName;
+                        //return error.InvalidSerializedNeuralNetworkLayer;
                         return std.json.ParseFromValueError.UnknownField;
-                    }
+                    },
                 }
             },
             else => {
-                std.log.err("Expected string for layer.serialized_type_name but saw {s}: {any}", .{
-                    @tagName(serialized_type_name),
-                    serialized_type_name,
+                std.log.err("Expected object for layer but saw {s}: {any}", .{
+                    @tagName(serialized_layer),
+                    serialized_layer,
                 });
                 //return error.InvalidSerializedNeuralNetworkLayer;
                 return std.json.ParseFromValueError.UnknownField;
