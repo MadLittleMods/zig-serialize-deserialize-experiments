@@ -114,28 +114,6 @@ const SerializedLayer = struct {
     parameters: std.json.Value,
 };
 
-fn deserialize(serialized_layer: SerializedLayer, allocator: std.mem.Allocator) !@This() {
-    inline for (possible_layer_types) |LayerType| {
-        if (std.mem.eql(u8, serialized_layer.serialized_type_name, @typeName(LayerType))) {
-            var parsed_specific_layer_instance = try std.json.parseFromValue(
-                LayerType,
-                allocator,
-                serialized_layer.parameters,
-                .{},
-            );
-
-            return parsed_specific_layer_instance.value.layer();
-        }
-    } else {
-        std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
-            serialized_layer.serialized_type_name,
-        });
-        return std.json.ParseFromValueError.UnknownField;
-    }
-
-    @panic("Something went wrong in our layer deserialization and we reached a spot that should be unreachable");
-}
-
 pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
     const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
     return try jsonParseFromValue(allocator, json_value, options);
@@ -151,5 +129,25 @@ pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, 
     defer parsed_serialized_layer.deinit();
     const serialized_layer = parsed_serialized_layer.value;
 
-    return try deserialize(serialized_layer, allocator);
+    // Find the specific layer type that we're trying to deserialize into
+    inline for (possible_layer_types) |LayerType| {
+        if (std.mem.eql(u8, serialized_layer.serialized_type_name, @typeName(LayerType))) {
+            var parsed_specific_layer_instance = try std.json.parseFromValue(
+                LayerType,
+                allocator,
+                serialized_layer.parameters,
+                .{},
+            );
+
+            // Return a generic `Layer` instance
+            return parsed_specific_layer_instance.value.layer();
+        }
+    } else {
+        std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
+            serialized_layer.serialized_type_name,
+        });
+        return std.json.ParseFromValueError.UnknownField;
+    }
+
+    @panic("Something went wrong in our layer deserialization and we reached a spot that should be unreachable");
 }

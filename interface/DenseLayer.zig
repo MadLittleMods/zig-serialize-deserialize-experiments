@@ -81,29 +81,9 @@ pub fn jsonStringify(self: @This(), jws: anytype) !void {
     });
 }
 
-fn deserializeFromParameters(parameters: Parameters, allocator: std.mem.Allocator) !@This() {
-    const dense_layer = try init(
-        parameters.num_input_nodes,
-        parameters.num_output_nodes,
-        allocator,
-    );
-    @memcpy(dense_layer.parameters.weights, parameters.weights);
-    @memcpy(dense_layer.parameters.biases, parameters.biases);
-
-    return dense_layer;
-}
-
 pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
-    const parsed_parameters = try std.json.parseFromTokenSource(
-        Parameters,
-        allocator,
-        source,
-        options,
-    );
-    defer parsed_parameters.deinit();
-    const parameters = parsed_parameters.value;
-
-    return try deserializeFromParameters(parameters, allocator);
+    const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
+    return try jsonParseFromValue(allocator, json_value, options);
 }
 
 pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
@@ -116,5 +96,13 @@ pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, 
     defer parsed_parameters.deinit();
     const parameters = parsed_parameters.value;
 
-    return try deserializeFromParameters(parameters, allocator);
+    const dense_layer = try init(
+        parameters.num_input_nodes,
+        parameters.num_output_nodes,
+        allocator,
+    );
+    @memcpy(dense_layer.parameters.weights, parameters.weights);
+    @memcpy(dense_layer.parameters.biases, parameters.biases);
+
+    return dense_layer;
 }
