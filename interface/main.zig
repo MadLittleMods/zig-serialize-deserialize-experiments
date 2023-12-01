@@ -34,7 +34,7 @@ pub fn main() !void {
         .{},
     );
     defer parsed_nn.deinit();
-    var deserialized_neural_network = parsed_nn.value;
-    defer deserialized_neural_network.deinit(allocator);
+    const deserialized_neural_network = parsed_nn.value;
+    // defer deserialized_neural_network.deinit(allocator);
     std.log.debug("deserialized_neural_network: {any}", .{deserialized_neural_network});
 }
