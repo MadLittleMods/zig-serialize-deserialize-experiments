@@ -95,7 +95,7 @@ pub const SerializedNeuralNetwork = struct {
     layers: []std.json.ObjectMap,
 };
 
-pub fn jsonStringify(self: *@This(), jws: anytype) !void {
+pub fn jsonStringify(self: @This(), jws: anytype) !void {
     try jws.write(.{
         .timestamp = std.time.timestamp(),
         .layers = self.layers,

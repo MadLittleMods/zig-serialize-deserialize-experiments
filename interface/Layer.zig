@@ -2,14 +2,20 @@ const std = @import("std");
 
 const Self = @This();
 
+// Just trying to copy whatever `std.json.stringifyAlloc` does because we can't use
+// `anytype` in a function pointer definition
+const WriteStream = std.json.WriteStream(
+    std.ArrayList(u8).Writer,
+    .{ .checked_to_arbitrary_depth = {} },
+);
+
 // Interface implementation based off of https://www.openmymind.net/Zig-Interfaces/
 // pub const Layer = struct {
 ptr: *anyopaque,
 jsonStringifyFn: *const fn (
     ptr: *anyopaque,
-    // TODO: `anytype` doesn't work in a function pointer
-    jws: anytype,
-) anyerror!void,
+    jws: *WriteStream,
+) error{OutOfMemory}!void,
 // serializeFn: *const fn (
 //     ptr: *anyopaque,
 //     allocator: std.mem.Allocator,
@@ -41,9 +47,9 @@ pub fn init(
     if (ptr_info.Pointer.size != .One) @compileError("ptr must be a single item pointer");
 
     const gen = struct {
-        pub fn jsonStringify(pointer: *anyopaque, jws: anytype) anyerror!void {
+        pub fn jsonStringify(pointer: *anyopaque, jws: *WriteStream) error{OutOfMemory}!void {
             const self: T = @ptrCast(@alignCast(pointer));
-            return try ptr_info.Pointer.child.jsonStringify(self, jws);
+            return try ptr_info.Pointer.child.jsonStringify(self.*, jws);
         }
         // pub fn serialize(
         //     pointer: *anyopaque,
@@ -78,7 +84,7 @@ pub fn init(
     };
 }
 
-pub fn jsonStringify(self: *@This(), jws: anytype) !void {
+pub fn jsonStringify(self: @This(), jws: *WriteStream) !void {
     return try self.jsonStringifyFn(self.ptr, jws);
 }
 

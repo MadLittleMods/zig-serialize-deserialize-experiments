@@ -49,7 +49,7 @@ pub fn layer(self: *@This()) Layer {
     return Layer.init(self);
 }
 
-pub fn jsonStringify(self: *@This(), jws: anytype) !void {
+pub fn jsonStringify(self: @This(), jws: anytype) !void {
     try jws.write(.{
         .serialized_type_name = @typeName(Self),
         .parameters = self.parameters,
