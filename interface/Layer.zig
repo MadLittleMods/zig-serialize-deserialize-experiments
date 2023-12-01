@@ -1,4 +1,6 @@
 const std = @import("std");
+const DenseLayer = @import("./DenseLayer.zig");
+const ActivationLayer = @import("./ActivationLayer.zig");
 
 const Self = @This();
 
@@ -83,6 +85,10 @@ pub fn init(
         .deinitFn = gen.deinit,
     };
 }
+/// Used to clean-up any allocated resources used in the layer.
+pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
+    return self.deinitFn(self.ptr, allocator);
+}
 
 pub fn jsonStringify(self: @This(), jws: *WriteStream) !void {
     return try self.jsonStringifyFn(self.ptr, jws);
@@ -98,7 +104,52 @@ pub fn jsonStringify(self: @This(), jws: *WriteStream) !void {
 //     try self.deserializeFn(self.ptr, json, allocator);
 // }
 
-/// Used to clean-up any allocated resources used in the layer.
-pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-    return self.deinitFn(self.ptr, allocator);
+const possible_layer_types = [_]type{
+    DenseLayer,
+    ActivationLayer,
+};
+
+const SerializedLayer = struct {
+    serialized_type_name: []const u8,
+    parameters: std.json.Value,
+};
+
+fn deserialize(serialized_layer: SerializedLayer, allocator: std.mem.Allocator) !@This() {
+    inline for (possible_layer_types) |LayerType| {
+        if (std.mem.eql(u8, serialized_layer.serialized_type_name, @typeName(LayerType))) {
+            var parsed_specific_layer_instance = try std.json.parseFromValue(
+                LayerType,
+                allocator,
+                serialized_layer.parameters,
+                .{},
+            );
+
+            return parsed_specific_layer_instance.value.layer();
+        }
+    } else {
+        std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
+            serialized_layer.serialized_type_name,
+        });
+        return std.json.ParseFromValueError.UnknownField;
+    }
+
+    @panic("Something went wrong in our layer deserialization and we reached a spot that should be unreachable");
+}
+
+pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+    const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
+    return try jsonParseFromValue(allocator, json_value, options);
+}
+
+pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
+    const parsed_serialized_layer = try std.json.parseFromValue(
+        SerializedLayer,
+        allocator,
+        source,
+        options,
+    );
+    defer parsed_serialized_layer.deinit();
+    const serialized_layer = parsed_serialized_layer.value;
+
+    return try deserialize(serialized_layer, allocator);
 }
