@@ -36,9 +36,10 @@ pub fn main() !void {
     // Create the neural network
     var custom_neural_network = try NeuralNetwork.initFromLayers(
         &layers,
+        // TODO: Possible usage:
         // .{
         //     .layer_lookup_map = {
-        //         "DropoutLayer": CustomDropoutLayer
+        //         "CustomDropoutLayer": CustomDropoutLayer
         //     },
         // },
     );
@@ -54,6 +55,10 @@ pub fn main() !void {
     std.log.debug("serialized_neural_network: {s}\n\n", .{serialized_neural_network});
 
     // Deserialize the neural network
+    //
+    // XXX: This currently doesn't work because I'm not sure how to make the
+    // deserialization aware of the `CustomDropoutLayer` type like it is for the Layer
+    // types that are part and known to the library.
     const parsed_nn = try std.json.parseFromSlice(
         NeuralNetwork,
         allocator,

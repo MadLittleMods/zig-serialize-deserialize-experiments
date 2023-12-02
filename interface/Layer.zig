@@ -68,6 +68,7 @@ pub fn jsonStringify(self: @This(), jws: *WriteStream) !void {
     return try self.jsonStringifyFn(self.ptr, jws);
 }
 
+// The layer types that are known to the library
 const possible_layer_types = [_]type{
     DenseLayer,
     ActivationLayer,

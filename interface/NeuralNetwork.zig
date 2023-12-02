@@ -56,7 +56,7 @@ pub fn init(
 
 pub fn initFromLayers(
     layers: []Layer,
-    // TODO
+    // TODO: Possible usage:
     // options: struct {
     //     layer_lookup_map: std.StringHashMap(Layer),
     // },
