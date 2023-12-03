@@ -1,4 +1,5 @@
 const std = @import("std");
+const json = @import("json.zig");
 const DenseLayer = @import("./DenseLayer.zig");
 const ActivationLayer = @import("./ActivationLayer.zig");
 
