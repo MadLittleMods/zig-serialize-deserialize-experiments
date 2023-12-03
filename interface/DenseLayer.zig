@@ -13,7 +13,6 @@ const Layer = @import("Layer.zig");
 const Self = @This();
 
 pub const Parameters = struct {
-    serialized_name: []const u8 = "DenseLayer",
     num_input_nodes: usize,
     num_output_nodes: usize,
     weights: []f64,
@@ -57,6 +56,9 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    // For Debugging: Print the unique test weight
+    std.log.debug("Deinitializing DenseLayer -> For Debugging: Print the unique test weight {d}", .{self.parameters.weights[0]});
+
     allocator.free(self.parameters.weights);
     allocator.free(self.parameters.biases);
     allocator.free(self.cost_gradient_weights);
@@ -75,24 +77,24 @@ pub fn layer(self: *@This()) Layer {
     return Layer.init(self);
 }
 
-pub fn serialize(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
-    const json_text = try std.json.stringifyAlloc(
-        allocator,
-        self.parameters,
-        .{
-            .whitespace = .indent_2,
-        },
-    );
-    return json_text;
+pub fn jsonStringify(self: @This(), jws: anytype) !void {
+    try jws.write(.{
+        .serialized_type_name = @typeName(Self),
+        .parameters = self.parameters,
+    });
 }
 
-/// Turn some serialized parameters back into a `DenseLayer`.
-pub fn deserialize(self: *@This(), json: std.json.Value, allocator: std.mem.Allocator) !void {
+pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+    const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
+    return try jsonParseFromValue(allocator, json_value, options);
+}
+
+pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
     const parsed_parameters = try std.json.parseFromValue(
         Parameters,
         allocator,
-        json,
-        .{},
+        source,
+        options,
     );
     defer parsed_parameters.deinit();
     const parameters = parsed_parameters.value;
@@ -105,5 +107,5 @@ pub fn deserialize(self: *@This(), json: std.json.Value, allocator: std.mem.Allo
     @memcpy(dense_layer.parameters.weights, parameters.weights);
     @memcpy(dense_layer.parameters.biases, parameters.biases);
 
-    self.* = dense_layer;
+    return dense_layer;
 }

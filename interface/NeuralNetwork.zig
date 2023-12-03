@@ -26,6 +26,8 @@ pub fn init(
     const dense_layers = try allocator.alloc(DenseLayer, num_layers);
     const activation_layers = try allocator.alloc(ActivationLayer, num_layers);
 
+    var prng = std.rand.DefaultPrng.init(123);
+
     const layers = try allocator.alloc(Layer, 2 * num_layers);
     for (dense_layers, activation_layers, 0..) |*dense_layer, *activation_layer, dense_layer_index| {
         dense_layer.* = try DenseLayer.init(
@@ -37,6 +39,9 @@ pub fn init(
             ActivationLayer.ActivationFunction.relu,
             allocator,
         );
+
+        // For Debugging: Put a unique value for this layer so we can see if it's properly deserialized later
+        dense_layer.parameters.weights[0] = prng.random().floatNorm(f64);
 
         // Keep track of the generic layers
         const layer_index = 2 * dense_layer_index;
@@ -56,7 +61,7 @@ pub fn init(
 
 pub fn initFromLayers(
     layers: []Layer,
-    // TODO
+    // TODO: Possible usage:
     // options: struct {
     //     layer_lookup_map: std.StringHashMap(Layer),
     // },
@@ -90,55 +95,37 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     self.* = undefined;
 }
 
-// via https://www.aolium.com/karlseguin/46252c5b-587a-c419-be96-a0ccc2f11de4
-pub const RawJsonValue = struct {
-    value: ?[]const u8,
-
-    pub fn init(value: ?[]const u8) @This() {
-        return .{ .value = value };
-    }
-
-    pub fn jsonStringify(self: @This(), out: anytype) !void {
-        const json = if (self.value) |value| value else "null";
-        return out.print("{s}", .{json});
-    }
+pub const SerializedNeuralNetwork = struct {
+    timestamp: i64,
+    layers: []Layer,
 };
 
-pub fn serialize(self: *const Self, allocator: std.mem.Allocator) ![]const u8 {
-    const serialized_layers = try allocator.alloc(RawJsonValue, self.layers.len);
-    for (self.layers, serialized_layers) |layer, *serialized_layer| {
-        serialized_layer.* = RawJsonValue.init(try layer.serialize(allocator));
-    }
-    defer {
-        for (serialized_layers) |serialized_layer| {
-            if (serialized_layer.value) |value| {
-                allocator.free(value);
-            }
-        }
-        allocator.free(serialized_layers);
-    }
-
-    const json_text = try std.json.stringifyAlloc(allocator, .{
+pub fn jsonStringify(self: @This(), jws: anytype) !void {
+    try jws.write(.{
         .timestamp = std.time.timestamp(),
-        .layers = serialized_layers,
-    }, .{
-        .whitespace = .indent_2,
+        .layers = self.layers,
     });
-
-    return json_text;
 }
 
-pub fn deserialize(
-    self: *Self,
-    json: std.json.Value,
-    allocator: std.mem.Allocator,
-) !void {
-    _ = json;
-    // TODO
-    self.* = .{
-        .layers = try allocator.alloc(Layer, 0),
-        // We don't need to free any layers because it's the callers
-        // responsibility to free them since they created them.
-        .layers_to_free = .{},
+pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+    const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
+    return try jsonParseFromValue(allocator, json_value, options);
+}
+
+pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
+    const parsed_serialized_neural_network = try std.json.parseFromValue(
+        SerializedNeuralNetwork,
+        allocator,
+        source,
+        options,
+    );
+    defer parsed_serialized_neural_network.deinit();
+    const serialized_neural_network = parsed_serialized_neural_network.value;
+
+    return .{
+        .layers = serialized_neural_network.layers,
+        .layers_to_free = .{
+            .layers = serialized_neural_network.layers,
+        },
     };
 }

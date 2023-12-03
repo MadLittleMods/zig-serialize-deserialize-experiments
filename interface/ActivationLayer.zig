@@ -17,7 +17,6 @@ pub const ActivationFunction = enum {
 const Self = @This();
 
 pub const Parameters = struct {
-    serialized_name: []const u8 = "ActivationLayer",
     activation_function: ActivationFunction,
 };
 
@@ -37,6 +36,10 @@ pub fn init(
 
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     _ = allocator;
+
+    // For Debugging: Print the dropout_rate that makes this layer unique
+    std.log.debug("Deinitializing ActivationLayer -> For Debugging: Print the activation_function {any}", .{self.parameters.activation_function});
+
     // This isn't strictly necessary but it marks the memory as dirty (010101...) in
     // safe modes (https://zig.news/kristoff/what-s-undefined-in-zig-9h)
     self.* = undefined;
@@ -50,24 +53,24 @@ pub fn layer(self: *@This()) Layer {
     return Layer.init(self);
 }
 
-pub fn serialize(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
-    const json_text = try std.json.stringifyAlloc(
-        allocator,
-        self.parameters,
-        .{
-            .whitespace = .indent_2,
-        },
-    );
-    return json_text;
+pub fn jsonStringify(self: @This(), jws: anytype) !void {
+    try jws.write(.{
+        .serialized_type_name = @typeName(Self),
+        .parameters = self.parameters,
+    });
 }
 
-/// Turn some serialized parameters back into a `ActivationLayer`.
-pub fn deserialize(self: *@This(), json: std.json.Value, allocator: std.mem.Allocator) !void {
+pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+    const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
+    return try jsonParseFromValue(allocator, json_value, options);
+}
+
+pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
     const parsed_parameters = try std.json.parseFromValue(
         Parameters,
         allocator,
-        json,
-        .{},
+        source,
+        options,
     );
     defer parsed_parameters.deinit();
     const parameters = parsed_parameters.value;
@@ -77,5 +80,5 @@ pub fn deserialize(self: *@This(), json: std.json.Value, allocator: std.mem.Allo
         allocator,
     );
 
-    self.* = activation_layer;
+    return activation_layer;
 }
