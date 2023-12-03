@@ -8,12 +8,10 @@ const TypeMap = std.StringHashMap(*const fn (allocator: std.mem.Allocator) anyer
 
 // Map from `@typeName(interface)` to another map of `@typeName(concrete)` implementing
 // that interface to a deserialize function that returns the interface type.
-const GenericTypeMap = std.StringHashMap(
-    *TypeMap,
-);
+const GenericTypeMap = std.StringHashMap(*TypeMap);
 
 const CustomDropoutLayerDeserializer = struct {
-    pub fn deserialize(allocator: std.mem.Allocator) anyerror!*anyopaque {
+    pub fn deserialize(allocator: std.mem.Allocator) !*anyopaque {
         // XXX: This leaks memory. Need to figure out how to structure `deserialize` better.
         var custom_dropout_layer = try allocator.create(CustomDropoutLayer);
         custom_dropout_layer.* = .{
@@ -39,6 +37,7 @@ pub fn main() !void {
         }
     }
 
+    // Create a map that tracks the various interface types (like Layers)
     var generic_type_map = GenericTypeMap.init(allocator);
     defer generic_type_map.deinit();
 
