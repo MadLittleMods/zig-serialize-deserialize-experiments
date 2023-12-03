@@ -6,7 +6,7 @@ const log = std.log.scoped(.zig_neural_networks);
 
 const Layer = @import("Layer.zig");
 
-// pub const DropoutLayer = struct {
+// pub const CustomDropoutLayer = struct {
 const Self = @This();
 
 pub const Parameters = struct {
@@ -30,6 +30,10 @@ pub fn init(
 
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     _ = allocator;
+
+    // For Debugging: Print the dropout_rate that makes this layer unique
+    std.log.debug("Deinitializing CustomDropoutLayer -> For Debugging: Print the dropout_rate {d}", .{self.parameters.dropout_rate});
+
     // This isn't strictly necessary but it marks the memory as dirty (010101...) in
     // safe modes (https://zig.news/kristoff/what-s-undefined-in-zig-9h)
     self.* = undefined;

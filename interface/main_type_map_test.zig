@@ -22,9 +22,10 @@ const CustomDropoutLayerDeserializer = struct {
             },
         };
 
-        var layer = custom_dropout_layer.layer();
+        const layer = try allocator.create(Layer);
+        layer.* = custom_dropout_layer.layer();
 
-        return @ptrCast(&layer);
+        return @ptrCast(layer);
     }
 };
 
@@ -54,14 +55,19 @@ pub fn main() !void {
 }
 
 fn tryToUseTypeMap(generic_type_map: GenericTypeMap, allocator: std.mem.Allocator) !void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
     const layer_type_map = generic_type_map.get(@typeName(Layer)) orelse @panic("Layer type map not found");
     const deserializeFn = layer_type_map.get(@typeName(CustomDropoutLayer)) orelse @panic("CustomDropoutLayer deserialize function not found");
     const specific_layer = @as(*Layer, @ptrCast(@alignCast(
         try deserializeFn(
-            allocator,
+            arena_allocator,
             // serialized_data,
         ),
     )));
+    defer specific_layer.deinit(allocator);
 
     std.log.debug("specific_layer {any},", .{specific_layer});
 }

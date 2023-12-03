@@ -26,6 +26,8 @@ pub fn init(
     const dense_layers = try allocator.alloc(DenseLayer, num_layers);
     const activation_layers = try allocator.alloc(ActivationLayer, num_layers);
 
+    var prng = std.rand.DefaultPrng.init(123);
+
     const layers = try allocator.alloc(Layer, 2 * num_layers);
     for (dense_layers, activation_layers, 0..) |*dense_layer, *activation_layer, dense_layer_index| {
         dense_layer.* = try DenseLayer.init(
@@ -37,6 +39,9 @@ pub fn init(
             ActivationLayer.ActivationFunction.relu,
             allocator,
         );
+
+        // For Debugging: Put a unique value for this layer so we can see if it's properly deserialized later
+        dense_layer.parameters.weights[0] = prng.random().floatNorm(f64);
 
         // Keep track of the generic layers
         const layer_index = 2 * dense_layer_index;

@@ -56,6 +56,9 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    // For Debugging: Print the unique test weight
+    std.log.debug("Deinitializing DenseLayer -> For Debugging: Print the unique test weight {d}", .{self.parameters.weights[0]});
+
     allocator.free(self.parameters.weights);
     allocator.free(self.parameters.biases);
     allocator.free(self.cost_gradient_weights);

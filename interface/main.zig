@@ -21,7 +21,7 @@ pub fn main() !void {
     const serialized_neural_network = try std.json.stringifyAlloc(
         allocator,
         neural_network,
-        .{},
+        .{ .whitespace = .indent_2 },
     );
     defer allocator.free(serialized_neural_network);
     std.log.debug("serialized_neural_network: {s}\n\n", .{serialized_neural_network});
