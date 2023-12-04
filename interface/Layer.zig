@@ -5,13 +5,19 @@ const ActivationLayer = @import("./ActivationLayer.zig");
 const Self = @This();
 
 const JsonDeserializeFn = *const fn (allocator: std.mem.Allocator, source: std.json.Value) anyerror!Self;
-// The custom layer types that people can register
-pub var type_name_to_deserialize_layer_fn_map: std.StringHashMapUnmanaged(JsonDeserializeFn) = .{};
 // The layers already known to the library
-pub const builtin_type_name_to_deserialize_layer_fn_map = std.ComptimeStringMap(JsonDeserializeFn, .{
+const builtin_type_name_to_deserialize_layer_fn_map = std.ComptimeStringMap(JsonDeserializeFn, .{
     .{ @typeName(DenseLayer), deserializeFnFromLayer(DenseLayer) },
     .{ @typeName(ActivationLayer), deserializeFnFromLayer(ActivationLayer) },
 });
+// The custom layer types that people can register
+var type_name_to_deserialize_layer_fn_map: std.StringHashMapUnmanaged(JsonDeserializeFn) = .{};
+pub fn registerCustomLayer(comptime T: type, allocator: std.mem.Allocator) !void {
+    try type_name_to_deserialize_layer_fn_map.put(allocator, @typeName(T), deserializeFnFromLayer(T));
+}
+pub fn deinitCustomLayerMap(allocator: std.mem.Allocator) void {
+    type_name_to_deserialize_layer_fn_map.deinit(allocator);
+}
 
 // Just trying to copy whatever `std.json.stringifyAlloc` does because we can't use
 // `anytype` in a function pointer definition

@@ -20,12 +20,8 @@ pub fn main() !void {
     // ============================================
     // Register the custom layer types we will be using with the library (this is used
     // for deserialization).
-    try Layer.type_name_to_deserialize_layer_fn_map.put(
-        allocator,
-        @typeName(CustomDropoutLayer),
-        Layer.deserializeFnFromLayer(CustomDropoutLayer),
-    );
-    defer Layer.type_name_to_deserialize_layer_fn_map.deinit(allocator);
+    try Layer.registerCustomLayer(CustomDropoutLayer, allocator);
+    defer Layer.deinitCustomLayerMap(allocator);
 
     // Setup the layers we'll be using in our custom neural network
     var dense_layer1 = try DenseLayer.init(2, 3, allocator);
