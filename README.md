@@ -39,10 +39,6 @@ The second example uses a custom user-supplied `Layer` type `CustomDropoutLayer`
 a bit harder to deserialize because we don't know this type from the perspective of the
 library.
 
-> Note: This currently doesn't work because I'm not sure how to make the deserialization
-> aware of the `CustomDropoutLayer` type like it does for the `Layer` types that are
-> part-of and known to the library.
-
 ```sh
 zig run ./interface/main_custom_network.zig
 ```
