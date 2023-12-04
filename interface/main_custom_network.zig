@@ -1,4 +1,5 @@
 const std = @import("std");
+const json = @import("json.zig");
 
 const NeuralNetwork = @import("NeuralNetwork.zig");
 const Layer = @import("Layer.zig");
@@ -46,7 +47,7 @@ pub fn main() !void {
     defer custom_neural_network.deinit(allocator);
 
     // Serialize the neural network
-    const serialized_neural_network = try std.json.stringifyAlloc(
+    const serialized_neural_network = try json.stringifyAlloc(
         allocator,
         custom_neural_network,
         .{},
@@ -63,6 +64,8 @@ pub fn main() !void {
         NeuralNetwork,
         allocator,
         serialized_neural_network,
+        // TODO
+        void,
         .{},
     );
     defer parsed_nn.deinit();

@@ -66,12 +66,13 @@ pub fn parseFromSlice(
     comptime T: type,
     allocator: Allocator,
     s: []const u8,
+    context: anytype,
     options: ParseOptions,
 ) ParseError(Scanner)!Parsed(T) {
     var scanner = Scanner.initCompleteInput(allocator, s);
     defer scanner.deinit();
 
-    return parseFromTokenSource(T, allocator, &scanner, options);
+    return parseFromTokenSource(T, allocator, &scanner, context, options);
 }
 
 /// Parses the json document from `s` and returns the result.
@@ -81,12 +82,13 @@ pub fn parseFromSliceLeaky(
     comptime T: type,
     allocator: Allocator,
     s: []const u8,
+    context: anytype,
     options: ParseOptions,
 ) ParseError(Scanner)!T {
     var scanner = Scanner.initCompleteInput(allocator, s);
     defer scanner.deinit();
 
-    return parseFromTokenSourceLeaky(T, allocator, &scanner, options);
+    return parseFromTokenSourceLeaky(T, allocator, &scanner, context, options);
 }
 
 /// `scanner_or_reader` must be either a `*std.json.Scanner` with complete input or a `*std.json.Reader`.
@@ -95,6 +97,7 @@ pub fn parseFromTokenSource(
     comptime T: type,
     allocator: Allocator,
     scanner_or_reader: anytype,
+    context: anytype,
     options: ParseOptions,
 ) ParseError(@TypeOf(scanner_or_reader.*))!Parsed(T) {
     var parsed = Parsed(T){
@@ -105,7 +108,7 @@ pub fn parseFromTokenSource(
     parsed.arena.* = ArenaAllocator.init(allocator);
     errdefer parsed.arena.deinit();
 
-    parsed.value = try parseFromTokenSourceLeaky(T, parsed.arena.allocator(), scanner_or_reader, options);
+    parsed.value = try parseFromTokenSourceLeaky(T, parsed.arena.allocator(), scanner_or_reader, context, options);
 
     return parsed;
 }
@@ -117,6 +120,7 @@ pub fn parseFromTokenSourceLeaky(
     comptime T: type,
     allocator: Allocator,
     scanner_or_reader: anytype,
+    context: anytype,
     options: ParseOptions,
 ) ParseError(@TypeOf(scanner_or_reader.*))!T {
     if (@TypeOf(scanner_or_reader.*) == Scanner) {
@@ -138,7 +142,7 @@ pub fn parseFromTokenSourceLeaky(
         }
     }
 
-    const value = try innerParse(T, allocator, scanner_or_reader, resolved_options);
+    const value = try innerParse(T, allocator, scanner_or_reader, context, resolved_options);
 
     assert(.end_of_document == try scanner_or_reader.next());
 
@@ -151,6 +155,7 @@ pub fn parseFromValue(
     comptime T: type,
     allocator: Allocator,
     source: Value,
+    context: anytype,
     options: ParseOptions,
 ) ParseFromValueError!Parsed(T) {
     var parsed = Parsed(T){
@@ -161,7 +166,7 @@ pub fn parseFromValue(
     parsed.arena.* = ArenaAllocator.init(allocator);
     errdefer parsed.arena.deinit();
 
-    parsed.value = try parseFromValueLeaky(T, parsed.arena.allocator(), source, options);
+    parsed.value = try parseFromValueLeaky(T, parsed.arena.allocator(), source, context, options);
 
     return parsed;
 }
@@ -170,12 +175,13 @@ pub fn parseFromValueLeaky(
     comptime T: type,
     allocator: Allocator,
     source: Value,
+    context: anytype,
     options: ParseOptions,
 ) ParseFromValueError!T {
     // I guess this function doesn't need to exist,
     // but the flow of the sourcecode is easy to follow and grouped nicely with
     // this pub redirect function near the top and the implementation near the bottom.
-    return innerParseFromValue(T, allocator, source, options);
+    return innerParseFromValue(T, allocator, source, context, options);
 }
 
 /// The error set that will be returned when parsing from `*Source`.
@@ -208,8 +214,21 @@ pub fn innerParse(
     comptime T: type,
     allocator: Allocator,
     source: anytype,
+    context: anytype,
     options: ParseOptions,
 ) ParseError(@TypeOf(source.*))!T {
+    // Whether the `jsonParse()` method takes a `context` parameter. Because we're
+    // making this `context` change outside of the standard library, we want to be
+    // backwards compatible with people who implement the standard `jsonParse()`
+    // function.
+    const uses_context_json_parse_fn = blk: {
+        if (comptime std.meta.trait.hasFn("jsonParseFromValue")(T)) {
+            break :blk @typeInfo(@TypeOf(T.jsonParseFromValue)).Fn.params.len == 4;
+        }
+
+        break :blk false;
+    };
+
     switch (@typeInfo(T)) {
         .Bool => {
             return switch (try source.next()) {
@@ -243,13 +262,17 @@ pub fn innerParse(
                     return null;
                 },
                 else => {
-                    return try innerParse(optionalInfo.child, allocator, source, options);
+                    return try innerParse(optionalInfo.child, allocator, source, context, options);
                 },
             }
         },
         .Enum => {
             if (comptime std.meta.trait.hasFn("jsonParse")(T)) {
-                return T.jsonParse(allocator, source, options);
+                if (uses_context_json_parse_fn) {
+                    return T.jsonParse(allocator, source, context, options);
+                } else {
+                    return T.jsonParse(allocator, source, options);
+                }
             }
 
             const token = try source.nextAllocMax(allocator, .alloc_if_needed, options.max_value_len.?);
@@ -262,7 +285,11 @@ pub fn innerParse(
         },
         .Union => |unionInfo| {
             if (comptime std.meta.trait.hasFn("jsonParse")(T)) {
-                return T.jsonParse(allocator, source, options);
+                if (uses_context_json_parse_fn) {
+                    return T.jsonParse(allocator, source, context, options);
+                } else {
+                    return T.jsonParse(allocator, source, options);
+                }
             }
 
             if (unionInfo.tag_type == null) @compileError("Unable to parse into untagged union '" ++ @typeName(T) ++ "'");
@@ -291,7 +318,7 @@ pub fn innerParse(
                         result = @unionInit(T, u_field.name, {});
                     } else {
                         // Recurse.
-                        result = @unionInit(T, u_field.name, try innerParse(u_field.type, allocator, source, options));
+                        result = @unionInit(T, u_field.name, try innerParse(u_field.type, allocator, source, context, options));
                     }
                     break;
                 }
@@ -311,7 +338,7 @@ pub fn innerParse(
 
                 var r: T = undefined;
                 inline for (0..structInfo.fields.len) |i| {
-                    r[i] = try innerParse(structInfo.fields[i].type, allocator, source, options);
+                    r[i] = try innerParse(structInfo.fields[i].type, allocator, source, context, options);
                 }
 
                 if (.array_end != try source.next()) return error.UnexpectedToken;
@@ -320,7 +347,11 @@ pub fn innerParse(
             }
 
             if (comptime std.meta.trait.hasFn("jsonParse")(T)) {
-                return T.jsonParse(allocator, source, options);
+                if (uses_context_json_parse_fn) {
+                    return T.jsonParse(allocator, source, context, options);
+                } else {
+                    return T.jsonParse(allocator, source, options);
+                }
             }
 
             if (.object_begin != try source.next()) return error.UnexpectedToken;
@@ -352,7 +383,7 @@ pub fn innerParse(
                                 .use_first => {
                                     // Parse and ignore the redundant value.
                                     // We don't want to skip the value, because we want type checking.
-                                    _ = try innerParse(field.type, allocator, source, options);
+                                    _ = try innerParse(field.type, allocator, source, context, options);
                                     break;
                                 },
                                 .@"error" => return error.DuplicateField,
@@ -381,7 +412,7 @@ pub fn innerParse(
             switch (try source.peekNextTokenType()) {
                 .array_begin => {
                     // Typical array.
-                    return internalParseArray(T, arrayInfo.child, arrayInfo.len, allocator, source, options);
+                    return internalParseArray(T, arrayInfo.child, arrayInfo.len, allocator, source, context, options);
                 },
                 .string => {
                     if (arrayInfo.child != u8) return error.UnexpectedToken;
@@ -435,7 +466,7 @@ pub fn innerParse(
         .Vector => |vecInfo| {
             switch (try source.peekNextTokenType()) {
                 .array_begin => {
-                    return internalParseArray(T, vecInfo.child, vecInfo.len, allocator, source, options);
+                    return internalParseArray(T, vecInfo.child, vecInfo.len, allocator, source, context, options);
                 },
                 else => return error.UnexpectedToken,
             }
@@ -445,7 +476,7 @@ pub fn innerParse(
             switch (ptrInfo.size) {
                 .One => {
                     const r: *ptrInfo.child = try allocator.create(ptrInfo.child);
-                    r.* = try innerParse(ptrInfo.child, allocator, source, options);
+                    r.* = try innerParse(ptrInfo.child, allocator, source, context, options);
                     return r;
                 },
                 .Slice => {
@@ -465,7 +496,7 @@ pub fn innerParse(
                                 }
 
                                 try arraylist.ensureUnusedCapacity(1);
-                                arraylist.appendAssumeCapacity(try innerParse(ptrInfo.child, allocator, source, options));
+                                arraylist.appendAssumeCapacity(try innerParse(ptrInfo.child, allocator, source, context, options));
                             }
 
                             if (ptrInfo.sentinel) |some| {
@@ -515,6 +546,7 @@ fn internalParseArray(
     comptime len: comptime_int,
     allocator: Allocator,
     source: anytype,
+    context: anytype,
     options: ParseOptions,
 ) !T {
     assert(.array_begin == try source.next());
@@ -522,7 +554,7 @@ fn internalParseArray(
     var r: T = undefined;
     var i: usize = 0;
     while (i < len) : (i += 1) {
-        r[i] = try innerParse(Child, allocator, source, options);
+        r[i] = try innerParse(Child, allocator, source, context, options);
     }
 
     if (.array_end != try source.next()) return error.UnexpectedToken;
@@ -539,8 +571,21 @@ pub fn innerParseFromValue(
     comptime T: type,
     allocator: Allocator,
     source: Value,
+    context: anytype,
     options: ParseOptions,
 ) ParseFromValueError!T {
+    // Whether the `jsonParse()` method takes a `context` parameter. Because we're
+    // making this `context` change outside of the standard library, we want to be
+    // backwards compatible with people who implement the standard `jsonParse()`
+    // function.
+    const uses_context_json_parse_fn = blk: {
+        if (comptime std.meta.trait.hasFn("jsonParseFromValue")(T)) {
+            break :blk @typeInfo(@TypeOf(T.jsonParseFromValue)).Fn.params.len == 4;
+        }
+
+        break :blk false;
+    };
+
     switch (@typeInfo(T)) {
         .Bool => {
             switch (source) {
@@ -578,12 +623,16 @@ pub fn innerParseFromValue(
         .Optional => |optionalInfo| {
             switch (source) {
                 .null => return null,
-                else => return try innerParseFromValue(optionalInfo.child, allocator, source, options),
+                else => return try innerParseFromValue(optionalInfo.child, allocator, source, context, options),
             }
         },
         .Enum => {
             if (comptime std.meta.trait.hasFn("jsonParseFromValue")(T)) {
-                return T.jsonParseFromValue(allocator, source, options);
+                if (uses_context_json_parse_fn) {
+                    return T.jsonParseFromValue(allocator, source, context, options);
+                } else {
+                    return T.jsonParseFromValue(allocator, source, options);
+                }
             }
 
             switch (source) {
@@ -595,7 +644,11 @@ pub fn innerParseFromValue(
         },
         .Union => |unionInfo| {
             if (comptime std.meta.trait.hasFn("jsonParseFromValue")(T)) {
-                return T.jsonParseFromValue(allocator, source, options);
+                if (uses_context_json_parse_fn) {
+                    return T.jsonParseFromValue(allocator, source, context, options);
+                } else {
+                    return T.jsonParseFromValue(allocator, source, options);
+                }
             }
 
             if (unionInfo.tag_type == null) @compileError("Unable to parse into untagged union '" ++ @typeName(T) ++ "'");
@@ -616,7 +669,7 @@ pub fn innerParseFromValue(
                         return @unionInit(T, u_field.name, {});
                     }
                     // Recurse.
-                    return @unionInit(T, u_field.name, try innerParseFromValue(u_field.type, allocator, kv.value_ptr.*, options));
+                    return @unionInit(T, u_field.name, try innerParseFromValue(u_field.type, allocator, kv.value_ptr.*, context, options));
                 }
             }
             // Didn't match anything.
@@ -630,14 +683,18 @@ pub fn innerParseFromValue(
 
                 var r: T = undefined;
                 inline for (0..structInfo.fields.len, source.array.items) |i, item| {
-                    r[i] = try innerParseFromValue(structInfo.fields[i].type, allocator, item, options);
+                    r[i] = try innerParseFromValue(structInfo.fields[i].type, allocator, item, context, options);
                 }
 
                 return r;
             }
 
             if (comptime std.meta.trait.hasFn("jsonParseFromValue")(T)) {
-                return T.jsonParseFromValue(allocator, source, options);
+                if (uses_context_json_parse_fn) {
+                    return T.jsonParseFromValue(allocator, source, context, options);
+                } else {
+                    return T.jsonParseFromValue(allocator, source, options);
+                }
             }
 
             if (source != .object) return error.UnexpectedToken;
@@ -653,7 +710,7 @@ pub fn innerParseFromValue(
                     if (field.is_comptime) @compileError("comptime fields are not supported: " ++ @typeName(T) ++ "." ++ field.name);
                     if (std.mem.eql(u8, field.name, field_name)) {
                         assert(!fields_seen[i]); // Can't have duplicate keys in a Value.object.
-                        @field(r, field.name) = try innerParseFromValue(field.type, allocator, kv.value_ptr.*, options);
+                        @field(r, field.name) = try innerParseFromValue(field.type, allocator, kv.value_ptr.*, context, options);
                         fields_seen[i] = true;
                         break;
                     }
@@ -670,7 +727,7 @@ pub fn innerParseFromValue(
             switch (source) {
                 .array => |array| {
                     // Typical array.
-                    return innerParseArrayFromArrayValue(T, arrayInfo.child, arrayInfo.len, allocator, array, options);
+                    return innerParseArrayFromArrayValue(T, arrayInfo.child, arrayInfo.len, allocator, array, context, options);
                 },
                 .string => |s| {
                     if (arrayInfo.child != u8) return error.UnexpectedToken;
@@ -690,7 +747,7 @@ pub fn innerParseFromValue(
         .Vector => |vecInfo| {
             switch (source) {
                 .array => |array| {
-                    return innerParseArrayFromArrayValue(T, vecInfo.child, vecInfo.len, allocator, array, options);
+                    return innerParseArrayFromArrayValue(T, vecInfo.child, vecInfo.len, allocator, array, context, options);
                 },
                 else => return error.UnexpectedToken,
             }
@@ -700,7 +757,7 @@ pub fn innerParseFromValue(
             switch (ptrInfo.size) {
                 .One => {
                     const r: *ptrInfo.child = try allocator.create(ptrInfo.child);
-                    r.* = try innerParseFromValue(ptrInfo.child, allocator, source, options);
+                    r.* = try innerParseFromValue(ptrInfo.child, allocator, source, context, options);
                     return r;
                 },
                 .Slice => {
@@ -712,7 +769,7 @@ pub fn innerParseFromValue(
                                 try allocator.alloc(ptrInfo.child, array.items.len);
 
                             for (array.items, r) |item, *dest| {
-                                dest.* = try innerParseFromValue(ptrInfo.child, allocator, item, options);
+                                dest.* = try innerParseFromValue(ptrInfo.child, allocator, item, context, options);
                             }
 
                             return r;
@@ -745,13 +802,14 @@ fn innerParseArrayFromArrayValue(
     comptime len: comptime_int,
     allocator: Allocator,
     array: Array,
+    context: anytype,
     options: ParseOptions,
 ) !T {
     if (array.items.len != len) return error.LengthMismatch;
 
     var r: T = undefined;
     for (array.items, 0..) |item, i| {
-        r[i] = try innerParseFromValue(Child, allocator, item, options);
+        r[i] = try innerParseFromValue(Child, allocator, item, context, options);
     }
 
     return r;
