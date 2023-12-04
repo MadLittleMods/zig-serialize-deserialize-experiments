@@ -142,8 +142,7 @@ pub fn jsonParseFromValue(
             const layer = @as(*Self, @ptrCast(@alignCast(
                 deserializeFn(
                     allocator,
-                    // TODO
-                    // serialized_layer.parameters,
+                    serialized_layer.parameters,
                 ) catch |err| {
                     std.log.err("Unable to deserialize {s}: {any}", .{
                         serialized_layer.serialized_type_name,
@@ -165,4 +164,18 @@ pub fn jsonParseFromValue(
     }
 
     @panic("Something went wrong in our layer deserialization and we reached a spot that should be unreachable");
+}
+
+pub fn deserializeToLayer(comptime T: type) json.JsonDeserializeFn {
+    const gen = struct {
+        pub fn deserialize(allocator: std.mem.Allocator, source: std.json.Value) !*anyopaque {
+            const specific_layer = try allocator.create(T);
+            specific_layer.* = try T.jsonParseFromValue(allocator, source, .{});
+            const generic_layer = try allocator.create(Self);
+            generic_layer.* = specific_layer.layer();
+            return @ptrCast(generic_layer);
+        }
+    };
+
+    return gen.deserialize;
 }

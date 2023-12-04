@@ -5,7 +5,8 @@ const Layer = @import("Layer.zig");
 const CustomDropoutLayer = @import("CustomDropoutLayer.zig");
 
 const CustomDropoutLayerDeserializer = struct {
-    pub fn deserialize(allocator: std.mem.Allocator) !*anyopaque {
+    pub fn deserialize(allocator: std.mem.Allocator, source: std.json.Value) !*anyopaque {
+        _ = source;
         // XXX: This leaks memory. Need to figure out how to structure `deserialize` better.
         var custom_dropout_layer = try allocator.create(CustomDropoutLayer);
         custom_dropout_layer.* = .{

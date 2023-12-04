@@ -100,8 +100,9 @@ pub const innerParseFromValue = @import("json/static.zig").innerParseFromValue;
 pub const ParseError = @import("json/static.zig").ParseError;
 pub const ParseFromValueError = @import("json/static.zig").ParseFromValueError;
 
+pub const JsonDeserializeFn = *const fn (allocator: std.mem.Allocator, source: std.json.Value) anyerror!*anyopaque;
 // Map from `@typeName(type)` -> deserialize function
-pub const TypeMap = std.StringHashMap(*const fn (allocator: std.mem.Allocator) anyerror!*anyopaque);
+pub const TypeMap = std.StringHashMap(JsonDeserializeFn);
 // Map from `@typeName(interface)` to another map of `@typeName(concrete)` implementing
 // that interface to a deserialize function that returns the interface type.
 pub const GenericTypeMap = std.StringHashMap(*TypeMap);

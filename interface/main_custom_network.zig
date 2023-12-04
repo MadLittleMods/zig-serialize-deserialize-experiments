@@ -17,6 +17,17 @@ pub fn main() !void {
         }
     }
 
+    // Create a map that tracks the various interface types (like Layers)
+    var generic_type_map = json.GenericTypeMap.init(allocator);
+    defer generic_type_map.deinit();
+    // Create a map that tracks the various Layer types
+    var layer_type_map = json.TypeMap.init(allocator);
+    defer layer_type_map.deinit();
+    // Keep track of the Layer type map in our generic type map
+    try generic_type_map.put(@typeName(Layer), &layer_type_map);
+    // Fill out the Layer type map
+    try layer_type_map.put(@typeName(CustomDropoutLayer), Layer.deserializeToLayer(CustomDropoutLayer));
+
     // Custom neural network
     // ============================================
     // Setup the layers we'll be using in our custom neural network
@@ -64,8 +75,7 @@ pub fn main() !void {
         NeuralNetwork,
         allocator,
         serialized_neural_network,
-        // TODO
-        null,
+        generic_type_map,
         .{},
     );
     defer parsed_nn.deinit();
