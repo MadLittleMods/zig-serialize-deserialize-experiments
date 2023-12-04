@@ -108,16 +108,27 @@ pub fn jsonStringify(self: @This(), jws: anytype) !void {
     });
 }
 
-pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+pub fn jsonParse(
+    allocator: std.mem.Allocator,
+    source: anytype,
+    context: anytype,
+    options: std.json.ParseOptions,
+) !@This() {
     const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
-    return try jsonParseFromValue(allocator, json_value, options);
+    return try jsonParseFromValue(allocator, json_value, context, options);
 }
 
-pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
-    const parsed_serialized_neural_network = try std.json.parseFromValue(
+pub fn jsonParseFromValue(
+    allocator: std.mem.Allocator,
+    source: std.json.Value,
+    context: anytype,
+    options: std.json.ParseOptions,
+) !@This() {
+    const parsed_serialized_neural_network = try json.parseFromValue(
         SerializedNeuralNetwork,
         allocator,
         source,
+        context,
         options,
     );
     defer parsed_serialized_neural_network.deinit();

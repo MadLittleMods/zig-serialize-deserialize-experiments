@@ -80,17 +80,10 @@ const SerializedLayer = struct {
     parameters: std.json.Value,
 };
 
-const Context = union(enum) {
-    generic_type_map: json.GenericTypeMap,
-    // To let people avoid the hassle of creating a `GenericTypeMap` if they're
-    // only using the built-in layer types, we can just let them pass in `void`
-    void: void,
-};
-
 pub fn jsonParse(
     allocator: std.mem.Allocator,
     source: anytype,
-    context: Context,
+    context: anytype,
     options: std.json.ParseOptions,
 ) !@This() {
     const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
@@ -100,7 +93,9 @@ pub fn jsonParse(
 pub fn jsonParseFromValue(
     allocator: std.mem.Allocator,
     source: std.json.Value,
-    context: Context,
+    // To let people avoid the hassle of creating a `GenericTypeMap` if they're
+    // only using the built-in layer types, we can just let them pass in `null`
+    context: ?json.GenericTypeMap,
     options: std.json.ParseOptions,
 ) !@This() {
     const parsed_serialized_layer = try std.json.parseFromValue(
@@ -129,37 +124,43 @@ pub fn jsonParseFromValue(
             return parsed_specific_layer_instance.value.layer();
         }
     } else {
-        switch (context) {
-            .generic_type_map => {
-                const layer_type_map = context.get(@typeName(Self)) orelse {
-                    std.log.err("Unknown serialized_type_name {s} and we we're " ++
-                        "unable to find the Layer TypeMap in the GenericTypeMap context", .{
-                        serialized_layer.serialized_type_name,
-                    });
-                    return std.json.ParseFromValueError.UnknownField;
-                };
-                const deserializeFn = layer_type_map.get(serialized_layer.serialized_type_name) orelse {
-                    std.log.err("Unable to find serialized_type_name {s} in Layer TypeMap", .{
-                        serialized_layer.serialized_type_name,
-                    });
-                    return std.json.ParseFromValueError.UnknownField;
-                };
-
-                const layer = @as(*Self, @ptrCast(@alignCast(
-                    try deserializeFn(
-                        allocator,
-                        serialized_layer.parameters,
-                    ),
-                )));
-
-                return layer;
-            },
-            else => {
-                std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
+        if (context) |generic_type_map| {
+            const layer_type_map = generic_type_map.get(@typeName(Self)) orelse {
+                std.log.err("Unknown serialized_type_name {s} and we we're " ++
+                    "unable to find the Layer TypeMap in the GenericTypeMap context", .{
                     serialized_layer.serialized_type_name,
                 });
                 return std.json.ParseFromValueError.UnknownField;
-            },
+            };
+            const deserializeFn = layer_type_map.get(serialized_layer.serialized_type_name) orelse {
+                std.log.err("Unable to find serialized_type_name {s} in Layer TypeMap", .{
+                    serialized_layer.serialized_type_name,
+                });
+                return std.json.ParseFromValueError.UnknownField;
+            };
+
+            const layer = @as(*Self, @ptrCast(@alignCast(
+                deserializeFn(
+                    allocator,
+                    // TODO
+                    // serialized_layer.parameters,
+                ) catch |err| {
+                    std.log.err("Unable to deserialize {s}: {any}", .{
+                        serialized_layer.serialized_type_name,
+                        err,
+                    });
+                    return std.json.ParseFromValueError.UnknownField;
+                },
+            )));
+
+            // TODO: Seems sketchy
+            return layer.*;
+        } else {
+            std.log.err("Unknown serialized_type_name {s} (does not match any known layer types) " ++
+                "and no GenericTypeMap context was passed in", .{
+                serialized_layer.serialized_type_name,
+            });
+            return std.json.ParseFromValueError.UnknownField;
         }
     }
 

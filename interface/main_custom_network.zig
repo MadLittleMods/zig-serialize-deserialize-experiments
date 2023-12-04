@@ -60,12 +60,12 @@ pub fn main() !void {
     // XXX: This currently doesn't work because I'm not sure how to make the
     // deserialization aware of the `CustomDropoutLayer` type like it is for the Layer
     // types that are part and known to the library.
-    const parsed_nn = try std.json.parseFromSlice(
+    const parsed_nn = try json.parseFromSlice(
         NeuralNetwork,
         allocator,
         serialized_neural_network,
         // TODO
-        void,
+        null,
         .{},
     );
     defer parsed_nn.deinit();
