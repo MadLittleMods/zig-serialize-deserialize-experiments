@@ -80,12 +80,29 @@ const SerializedLayer = struct {
     parameters: std.json.Value,
 };
 
-pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
+const Context = union(enum) {
+    generic_type_map: json.GenericTypeMap,
+    // To let people avoid the hassle of creating a `GenericTypeMap` if they're
+    // only using the built-in layer types, we can just let them pass in `void`
+    void: void,
+};
+
+pub fn jsonParse(
+    allocator: std.mem.Allocator,
+    source: anytype,
+    context: Context,
+    options: std.json.ParseOptions,
+) !@This() {
     const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
-    return try jsonParseFromValue(allocator, json_value, options);
+    return try jsonParseFromValue(allocator, json_value, context, options);
 }
 
-pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
+pub fn jsonParseFromValue(
+    allocator: std.mem.Allocator,
+    source: std.json.Value,
+    context: Context,
+    options: std.json.ParseOptions,
+) !@This() {
     const parsed_serialized_layer = try std.json.parseFromValue(
         SerializedLayer,
         allocator,
@@ -96,6 +113,9 @@ pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, 
     const serialized_layer = parsed_serialized_layer.value;
 
     // Find the specific layer type that we're trying to deserialize into
+    //
+    // TODO: We should probably just align the built-in layers pattern with the way we
+    // do things for the GenericTypeMap below
     inline for (possible_layer_types) |LayerType| {
         if (std.mem.eql(u8, serialized_layer.serialized_type_name, @typeName(LayerType))) {
             var parsed_specific_layer_instance = try std.json.parseFromValue(
@@ -109,10 +129,38 @@ pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, 
             return parsed_specific_layer_instance.value.layer();
         }
     } else {
-        std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
-            serialized_layer.serialized_type_name,
-        });
-        return std.json.ParseFromValueError.UnknownField;
+        switch (context) {
+            .generic_type_map => {
+                const layer_type_map = context.get(@typeName(Self)) orelse {
+                    std.log.err("Unknown serialized_type_name {s} and we we're " ++
+                        "unable to find the Layer TypeMap in the GenericTypeMap context", .{
+                        serialized_layer.serialized_type_name,
+                    });
+                    return std.json.ParseFromValueError.UnknownField;
+                };
+                const deserializeFn = layer_type_map.get(serialized_layer.serialized_type_name) orelse {
+                    std.log.err("Unable to find serialized_type_name {s} in Layer TypeMap", .{
+                        serialized_layer.serialized_type_name,
+                    });
+                    return std.json.ParseFromValueError.UnknownField;
+                };
+
+                const layer = @as(*Self, @ptrCast(@alignCast(
+                    try deserializeFn(
+                        allocator,
+                        serialized_layer.parameters,
+                    ),
+                )));
+
+                return layer;
+            },
+            else => {
+                std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
+                    serialized_layer.serialized_type_name,
+                });
+                return std.json.ParseFromValueError.UnknownField;
+            },
+        }
     }
 
     @panic("Something went wrong in our layer deserialization and we reached a spot that should be unreachable");

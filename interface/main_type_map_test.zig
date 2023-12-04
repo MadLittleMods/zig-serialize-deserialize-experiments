@@ -1,14 +1,8 @@
 const std = @import("std");
+const json = @import("json.zig");
 
 const Layer = @import("Layer.zig");
 const CustomDropoutLayer = @import("CustomDropoutLayer.zig");
-
-// Map from `@typeName(type)` -> deserialize function
-const TypeMap = std.StringHashMap(*const fn (allocator: std.mem.Allocator) anyerror!*anyopaque);
-
-// Map from `@typeName(interface)` to another map of `@typeName(concrete)` implementing
-// that interface to a deserialize function that returns the interface type.
-const GenericTypeMap = std.StringHashMap(*TypeMap);
 
 const CustomDropoutLayerDeserializer = struct {
     pub fn deserialize(allocator: std.mem.Allocator) !*anyopaque {
@@ -38,11 +32,11 @@ pub fn main() !void {
     }
 
     // Create a map that tracks the various interface types (like Layers)
-    var generic_type_map = GenericTypeMap.init(allocator);
+    var generic_type_map = json.GenericTypeMap.init(allocator);
     defer generic_type_map.deinit();
 
     // Create a map that tracks the various Layer types
-    var layer_type_map = TypeMap.init(allocator);
+    var layer_type_map = json.TypeMap.init(allocator);
     defer layer_type_map.deinit();
     // Keep track of the Layer type map in our generic type map
     try generic_type_map.put(@typeName(Layer), &layer_type_map);
@@ -53,7 +47,7 @@ pub fn main() !void {
     try tryToUseTypeMap(generic_type_map, allocator);
 }
 
-fn tryToUseTypeMap(generic_type_map: GenericTypeMap, allocator: std.mem.Allocator) !void {
+fn tryToUseTypeMap(generic_type_map: json.GenericTypeMap, allocator: std.mem.Allocator) !void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const arena_allocator = arena.allocator();

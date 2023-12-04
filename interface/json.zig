@@ -9,6 +9,7 @@
 //! The low-level `writeStream` emits syntax-conformant JSON tokens to a `std.io.Writer`.
 //! The high-level `stringify` serializes a Zig or `Value` type into JSON.
 
+const std = @import("std");
 const builtin = @import("builtin");
 const testing = @import("std").testing;
 const ArrayList = @import("std").ArrayList;
@@ -98,6 +99,12 @@ pub const parseFromValueLeaky = @import("json/static.zig").parseFromValueLeaky;
 pub const innerParseFromValue = @import("json/static.zig").innerParseFromValue;
 pub const ParseError = @import("json/static.zig").ParseError;
 pub const ParseFromValueError = @import("json/static.zig").ParseFromValueError;
+
+// Map from `@typeName(type)` -> deserialize function
+pub const TypeMap = std.StringHashMap(*const fn (allocator: std.mem.Allocator) anyerror!*anyopaque);
+// Map from `@typeName(interface)` to another map of `@typeName(concrete)` implementing
+// that interface to a deserialize function that returns the interface type.
+pub const GenericTypeMap = std.StringHashMap(*TypeMap);
 
 pub const StringifyOptions = @import("json/stringify.zig").StringifyOptions;
 pub const stringify = @import("json/stringify.zig").stringify;
