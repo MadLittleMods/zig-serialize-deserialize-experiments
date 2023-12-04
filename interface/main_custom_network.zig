@@ -41,12 +41,6 @@ pub fn main() !void {
     // Create the neural network
     var custom_neural_network = try NeuralNetwork.initFromLayers(
         &layers,
-        // TODO: Possible usage:
-        // .{
-        //     .layer_lookup_map = {
-        //         "CustomDropoutLayer": CustomDropoutLayer
-        //     },
-        // },
     );
     defer custom_neural_network.deinit(allocator);
 
