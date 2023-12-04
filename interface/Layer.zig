@@ -4,6 +4,15 @@ const ActivationLayer = @import("./ActivationLayer.zig");
 
 const Self = @This();
 
+const JsonDeserializeFn = *const fn (allocator: std.mem.Allocator, source: std.json.Value) anyerror!Self;
+// The custom layer types that people can register
+pub var type_name_to_deserialize_layer_fn_map: std.StringHashMapUnmanaged(JsonDeserializeFn) = .{};
+// The layers already known to the library
+pub const builtin_type_name_to_deserialize_layer_fn_map = std.ComptimeStringMap(JsonDeserializeFn, .{
+    .{ @typeName(DenseLayer), deserializeFnFromLayer(DenseLayer) },
+    .{ @typeName(ActivationLayer), deserializeFnFromLayer(ActivationLayer) },
+});
+
 // Just trying to copy whatever `std.json.stringifyAlloc` does because we can't use
 // `anytype` in a function pointer definition
 const WriteStream = std.json.WriteStream(
@@ -68,12 +77,6 @@ pub fn jsonStringify(self: @This(), jws: *WriteStream) !void {
     return try self.jsonStringifyFn(self.ptr, jws);
 }
 
-// The layer types that are known to the library
-const possible_layer_types = [_]type{
-    DenseLayer,
-    ActivationLayer,
-};
-
 const SerializedLayer = struct {
     serialized_type_name: []const u8,
     parameters: std.json.Value,
@@ -94,25 +97,43 @@ pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, 
     defer parsed_serialized_layer.deinit();
     const serialized_layer = parsed_serialized_layer.value;
 
-    // Find the specific layer type that we're trying to deserialize into
-    inline for (possible_layer_types) |LayerType| {
-        if (std.mem.eql(u8, serialized_layer.serialized_type_name, @typeName(LayerType))) {
-            var parsed_specific_layer_instance = try std.json.parseFromValue(
-                LayerType,
-                allocator,
-                serialized_layer.parameters,
-                .{},
-            );
-
-            // Return a generic `Layer` instance
-            return parsed_specific_layer_instance.value.layer();
-        }
-    } else {
-        std.log.err("Unknown serialized_type_name {s} (does not match any known layer types)", .{
+    const deserializeFn =
+        // First check the built-in types since those are probably the most common
+        // anyway and since we're using a `std.ComptimeStringMap`, should have a faster lookup
+        builtin_type_name_to_deserialize_layer_fn_map.get(serialized_layer.serialized_type_name) orelse
+        // Then check the custom layer types that people can register
+        type_name_to_deserialize_layer_fn_map.get(serialized_layer.serialized_type_name) orelse {
+        std.log.err("Unknown serialized_type_name {s} (does not match any known layer types). " ++
+            "Try adding it to `Layer.type_name_to_deserialize_layer_fn_map`", .{
             serialized_layer.serialized_type_name,
         });
         return std.json.ParseFromValueError.UnknownField;
-    }
+    };
+    const generic_layer = deserializeFn(
+        allocator,
+        serialized_layer.parameters,
+    ) catch |err| {
+        // We use a `catch` here because `jsonParseFromValue()` has to return a certain
+        // error set and we can't directly return the unknown error that can come from
+        // `deserializeFn()` because it probably doesn't match that error set.
+        std.log.err("Unable to deserialize {s}: {any}", .{
+            serialized_layer.serialized_type_name,
+            err,
+        });
+        return std.json.ParseFromValueError.UnknownField;
+    };
 
-    @panic("Something went wrong in our layer deserialization and we reached a spot that should be unreachable");
+    return generic_layer;
+}
+
+// Helper to create a `JsonDeserializeFn` for a specific layer type
+pub fn deserializeFnFromLayer(comptime T: type) JsonDeserializeFn {
+    const gen = struct {
+        pub fn deserialize(allocator: std.mem.Allocator, source: std.json.Value) !Self {
+            var specific_layer = try T.jsonParseFromValue(allocator, source, .{});
+            return specific_layer.layer();
+        }
+    };
+
+    return gen.deserialize;
 }
