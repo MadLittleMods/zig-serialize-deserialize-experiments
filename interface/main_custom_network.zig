@@ -18,9 +18,14 @@ pub fn main() !void {
 
     // Custom neural network
     // ============================================
+    // Register the custom layer types we will be using with the library (this is used
+    // for deserialization).
+    try Layer.registerCustomLayer(CustomDropoutLayer, allocator);
+    defer Layer.deinitCustomLayerMap(allocator);
+
     // Setup the layers we'll be using in our custom neural network
     var dense_layer1 = try DenseLayer.init(2, 3, allocator);
-    var activation_layer2 = try ActivationLayer.init(.sigmoid, allocator);
+    var activation_layer2 = try ActivationLayer.init(.leaky_relu, allocator);
     var dropout_layer3 = try CustomDropoutLayer.init(0.2, allocator);
     var layers = [_]Layer{
         dense_layer1.layer(),
@@ -36,12 +41,6 @@ pub fn main() !void {
     // Create the neural network
     var custom_neural_network = try NeuralNetwork.initFromLayers(
         &layers,
-        // TODO: Possible usage:
-        // .{
-        //     .layer_lookup_map = {
-        //         "CustomDropoutLayer": CustomDropoutLayer
-        //     },
-        // },
     );
     defer custom_neural_network.deinit(allocator);
 
@@ -52,7 +51,7 @@ pub fn main() !void {
         .{},
     );
     defer allocator.free(serialized_neural_network);
-    std.log.debug("serialized_neural_network: {s}\n\n", .{serialized_neural_network});
+    std.log.debug("serialized_neural_network: {s}\n", .{serialized_neural_network});
 
     // Deserialize the neural network
     //

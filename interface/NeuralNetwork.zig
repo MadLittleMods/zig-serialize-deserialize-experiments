@@ -61,10 +61,6 @@ pub fn init(
 
 pub fn initFromLayers(
     layers: []Layer,
-    // TODO: Possible usage:
-    // options: struct {
-    //     layer_lookup_map: std.StringHashMap(Layer),
-    // },
 ) !Self {
     return Self{
         .layers = layers,
@@ -100,18 +96,21 @@ pub const SerializedNeuralNetwork = struct {
     layers: []Layer,
 };
 
+/// Serialize the layer to JSON (using the `std.json` library).
 pub fn jsonStringify(self: @This(), jws: anytype) !void {
-    try jws.write(.{
+    try jws.write(SerializedNeuralNetwork{
         .timestamp = std.time.timestamp(),
         .layers = self.layers,
     });
 }
 
+/// Deserialize the layer from JSON (using the `std.json` library).
 pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !@This() {
     const json_value = try std.json.parseFromTokenSourceLeaky(std.json.Value, allocator, source, options);
     return try jsonParseFromValue(allocator, json_value, options);
 }
 
+/// Deserialize the layer from a parsed JSON value. (using the `std.json` library).
 pub fn jsonParseFromValue(allocator: std.mem.Allocator, source: std.json.Value, options: std.json.ParseOptions) !@This() {
     const parsed_serialized_neural_network = try std.json.parseFromValue(
         SerializedNeuralNetwork,
