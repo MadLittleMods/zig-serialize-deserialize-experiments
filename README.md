@@ -24,10 +24,14 @@ how can we make the types that inherit from the interface serializable/deseriali
  - How can we handle custom types that come from someone using our library?
 
 The first example covers the first question and just uses the `DenseLayer` and
-`ActivationLayer` types that come with the library itself. The "library" is just
-imaginary in the context of this barebones example but is an important distinction
-because we actually will only know about the types that are part of the library in the
-real-world example.
+`ActivationLayer` types that come with the library itself. The "library" is just an
+imaginary neural network library in the context of this barebones example. A neural
+network has several layers of various types. Noting this library boundary of what's
+known from the perspective inside vs outside the library is an important distinction
+because we actually will only know about the types that are part of the library in a
+real-world scenario. All the source files here are in the same directory just to
+simplify what's needed to reproduce the problem and make it easier to run (no build
+necessary).
 
 ```sh
 zig run ./interface/main.zig
@@ -35,9 +39,9 @@ zig run ./interface/main.zig
 
 ---
 
-The second example uses a custom user-supplied `Layer` type `CustomDropoutLayer` which is
-a bit harder to deserialize because we don't know this type from the perspective of the
-library.
+The second example uses a custom user-supplied `Layer` type `CustomDropoutLayer` which
+is a bit harder to deserialize because we don't know this type from the perspective of
+the library.
 
 ```sh
 zig run ./interface/main_custom_network.zig
