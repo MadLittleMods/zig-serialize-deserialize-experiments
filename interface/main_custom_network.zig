@@ -51,7 +51,7 @@ pub fn main() !void {
         .{},
     );
     defer allocator.free(serialized_neural_network);
-    std.log.debug("serialized_neural_network: {s}\n\n", .{serialized_neural_network});
+    std.log.debug("serialized_neural_network: {s}\n", .{serialized_neural_network});
 
     // Deserialize the neural network
     //
