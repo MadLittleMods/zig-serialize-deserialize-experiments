@@ -4,6 +4,13 @@ const ActivationLayer = @import("./ActivationLayer.zig");
 
 const Self = @This();
 
+// Just trying to copy whatever `std.json.stringifyAlloc` does because we can't use
+// `anytype` in a function pointer definition
+const WriteStream = std.json.WriteStream(
+    std.ArrayList(u8).Writer,
+    .{ .checked_to_arbitrary_depth = {} },
+);
+
 const JsonDeserializeFn = *const fn (
     allocator: std.mem.Allocator,
     source: std.json.Value,
@@ -30,13 +37,6 @@ pub fn registerCustomLayer(comptime T: type, allocator: std.mem.Allocator) !void
 pub fn deinitCustomLayerMap(allocator: std.mem.Allocator) void {
     type_name_to_deserialize_layer_fn_map.deinit(allocator);
 }
-
-// Just trying to copy whatever `std.json.stringifyAlloc` does because we can't use
-// `anytype` in a function pointer definition
-const WriteStream = std.json.WriteStream(
-    std.ArrayList(u8).Writer,
-    .{ .checked_to_arbitrary_depth = {} },
-);
 
 // Interface implementation based off of https://www.openmymind.net/Zig-Interfaces/
 // pub const Layer = struct {
@@ -154,7 +154,10 @@ pub fn deserializeFnFromLayer(comptime T: type) JsonDeserializeFn {
             allocator: std.mem.Allocator,
             source: std.json.Value,
         ) std.json.ParseFromValueError!Self {
-            var specific_layer = try T.jsonParseFromValue(allocator, source, .{});
+            // We need to allocate this so we don't return a generic `Layer` with a
+            // dangling stack allocated pointer of the specific layer.
+            var specific_layer = try allocator.create(T);
+            specific_layer.* = try T.jsonParseFromValue(allocator, source, .{});
             return specific_layer.layer();
         }
     };
